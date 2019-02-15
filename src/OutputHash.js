@@ -13,6 +13,11 @@ function OutputHash({ validateOutput = false, validateOutputRegex = /^.*$/ } = {
 function replaceStringInAsset(asset, source, target) {
     const sourceRE = new RegExp(source, 'g');
 
+    // when optimize-cssnano-plugin disable css sourcemap, map file will be delete,so this may be undefined
+    if (!asset) {
+        return false;
+    }
+
     if (typeof asset === 'string') {
         return asset.replace(sourceRE, target);
     }
@@ -40,7 +45,18 @@ function replaceStringInAsset(asset, source, target) {
         asset.children = asset.children.map(child => replaceStringInAsset(child, source, target));
         return asset;
     }
-
+    // support config OutputHash after optimize-cssnano-plugin, genrate hash after minify
+    if (asset.source && typeof asset.source === 'function') {
+        const processedCss = asset.source().replace(sourceRE, target);
+        return {
+            source: function() {
+                return processedCss;
+            },
+            size: function() {
+                return processedCss.length;
+            },
+        };
+    }
     throw new Error(
         `Unknown asset type (${asset.constructor.name})!. ` +
             'Unfortunately this type of asset is not supported yet. ' +
@@ -62,11 +78,13 @@ function reHashChunk(chunk, assets, hashFn, nameMap) {
         const asset = assets[oldChunkName];
         const { fullHash, shortHash: newHash } = hashFn(asset.source());
 
-        let newChunkName;
+        let newChunkName, oldHash;
 
         if (oldChunkName.includes(chunk.renderedHash)) {
             // Save the hash map for replacing the secondary files
             nameMap[chunk.renderedHash] = newHash;
+
+            oldHash = chunk.renderedHash;
             newChunkName = oldChunkName.replace(chunk.renderedHash, newHash);
 
             // Keep the chunk hashes in sync
@@ -94,6 +112,8 @@ function reHashChunk(chunk, assets, hashFn, nameMap) {
 
             // Save the hash map for replacing the secondary files
             nameMap[module.renderedHash] = newHash;
+
+            oldHash = module.renderedHash;
             newChunkName = oldChunkName.replace(module.renderedHash, newHash);
 
             // Keep the module hashes in sync
@@ -101,11 +121,31 @@ function reHashChunk(chunk, assets, hashFn, nameMap) {
             module.renderedHash = newHash;
         }
 
+        // Change inline sourcemap comments to include the new hash
+        replaceStringInAsset(asset, oldHash, newHash);
+
         // Change file name to include the new hash
         chunk.files[index] = newChunkName;
         asset._name = newChunkName;
         delete assets[oldChunkName];
         assets[newChunkName] = asset;
+
+        // replace map file hash
+        const oldMapChunkName = oldChunkName + '.map';
+        const newMapChunkName = newChunkName + '.map';
+        const mapAsset = assets[oldMapChunkName];
+        if (!mapAsset) {
+            return false;
+        }
+
+        chunk.files.forEach((el, i) => {
+            if (el == oldMapChunkName) {
+                chunk.files[i] = newMapChunkName;
+            }
+        });
+
+        delete assets[oldMapChunkName];
+        assets[newMapChunkName] = mapAsset;
     });
 
     // Update the content of the rest of the files in the chunk
@@ -150,8 +190,15 @@ OutputHash.prototype.apply = function apply(compiler) {
             compiler.hooks.emit.taps[0].name !== 'OutputHash'
         ) {
             debugger;
+            let isHasMatchOutputHash = false;
             const plugins = compiler.hooks.emit.taps
-                .filter(plugin => plugin.name != 'OutputHash')
+                .filter(plugin => {
+                    if (isHasMatchOutputHash) {
+                        return false;
+                    }
+                    isHasMatchOutputHash = plugin.name === 'OutputHash';
+                    return !isHasMatchOutputHash;
+                })
                 .map(plugin => ` * ${plugin.name}`)
                 .join('\n');
 
@@ -173,6 +220,10 @@ OutputHash.prototype.apply = function apply(compiler) {
 
         // Reuses webpack options
         hashFn = input => {
+            // generate hash of content without sourcemap
+            const mapCommentReg = /\/[\/|*]# sourceMappingURL=.*.map(\*\/)?/g;
+            input = input.replace(mapCommentReg, '');
+
             const hashObj = crypto.createHash(hashFunction).update(input);
             if (hashSalt) hashObj.update(hashSalt);
             const fullHash = hashObj.digest(hashDigest);
