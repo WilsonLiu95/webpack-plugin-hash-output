@@ -14,6 +14,8 @@ const makeHashFn = ({
     hashDigestLength = 20,
     hashSalt = null,
 } = {}) => input => {
+    const reg = /\/[\/|*]# sourceMappingURL=.*.map(\*\/)?/g;
+    input = input.replace(reg, '');
     const hashObj = crypto.createHash(hashFunction).update(input);
     if (hashSalt) hashObj.update(hashSalt);
     const fullHash = hashObj.digest(hashDigest);
