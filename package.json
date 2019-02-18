@@ -1,6 +1,6 @@
 {
-  "name": "webpack-plugin-hash-output",
-  "version": "3.2.1",
+  "name": "@wilsonsliu95/webpack-plugin-hash-output",
+  "version": "3.4.0",
   "description": "Plugin for Webpack that uses the final output to compute the hash of an asset",
   "main": "src/OutputHash.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "test": "mocha --reporter spec test/*.js && eslint .",
     "clean": "rm -fr test/tmp"
   },
-  "author": "Sergio Cinos <sergio.cinos@gmail.com>",
+  "author": "wilsonsliu <wilsonliuxyz@gmail.com>",
   "license": "ISC",
   "devDependencies": {
     "chai": "^4.2.0",
@@ -33,7 +33,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/scinos/webpack-plugin-hash-output"
+    "url": "https://github.com/wilsonsliu/webpack-plugin-hash-output"
   },
   "keywords": [
     "webpack",
@@ -41,9 +41,5 @@
     "generate",
     "asset",
     "hash"
-  ],
-  "bugs": {
-    "url": "https://github.com/scinos/webpack-plugin-hash-output/issues"
-  },
-  "homepage": "https://github.com/scinos/webpack-plugin-hash-output"
+  ]
 }
